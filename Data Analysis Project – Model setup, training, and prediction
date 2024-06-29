@@ -1,0 +1,65 @@
+Data Analysis Project – Model setup, training, and prediction
+
+
+1.	How to set up and use the UDapter Model
+•	Pulled the git repository https://github.com/ahmetustun/udapter.git
+•	downloaded python 3.7.0
+•	created new conda environment python==3.7.0 (name: 2UD_env)
+•	commands in terminal: conda install pytorch-cpu==1.1.0
+•	conda install cpuonly -c pytorch
+•	conda install torchvision-cpu==0.3.0 -> error
+•	conda install conda-forge::torchvision-cpu
+•	pip install seqeval six tqdm lang2vec
+•	pip install allennlp==0.8.5
+•	pip install -r./requirements.txt -> requirement already satisfied
+•	pip install overrides==3.1.0
+
+2. Downloading the Treebanks
+•	For the FTA-model (Finnish, Turkish, Armenian): UD_Armenian-ArmTDP, UD_Finnish-TDT, UD_Turkish-PUD (UD-Treebanks v2.3
+•	For the ITA-model (Italian, Turkish, Armenian): UD_Armenian-ArmTDP, UD_Italian-ISDT, UD_Turkish-PUD (UD-Treebanks v2.3)
+•	the files must be placed in a data folder within the code directory
+•	the languages/in-langs.txt file must be modified according to the languages used
+
+3. Creating multilingual datasets
+•	./scripts/concat_ud_data.sh --add_lang_id
+•	Error:  NotADirectoryError: [Errno 20] Not a directory: 'data/ud-treebanks-v2.3/.DS_Store'”
+•	Fix: Adjustment in udapter/util.py – file ->       (103)  if treebank == '.DS_Store':
+•	(104)  continue
+
+•	mulitilingual datasets were created and stored in data/ud/multilingual: dev.conllu, test.conllu and train.conllu
+
+4. Training
+•	python train.py --config config/ud/multilingual/udapter-test.json
+
+•	Error: FileNotFoundError: file data/test/train.conllu not found
+•	Fix: Modified config/ud/multilingual/udapter-test.json
+(21)	"train_data_path": "data/ud/multilingual/train.conllu",
+(22)	"validation_data_path": "data/ud/multilingual/dev.conllu",
+(23)	 "test_data_path": "data/ud/multilingual/test.conllu"
+
+•	Config folder: changing "maximum_samples_per_batch": ["num_tokens", 32 * 100] in "maximum_samples_per_batch": ["num_tokens", 3200] in udapter-test.json (118), in adapter-test.json (118) and udify-test.json (90)
+
+
+•	Error: RuntimeError: expected scalar type Double but found Float
+•	Fix: 1. udapter/modules/text_field_embedder.py: added line 108: token_vectors = token_vectors.float()
+2. language_mlp.py: modified line 40: lang_emb = self.nonlinear_project(torch.tensor(lang_vector).float().to(lang_ids.device))
+
+
+5. Saving Models
+•	changed "num_serialized_models_to_keep" from 1 to -1 in udapter-test.json to safe the model weights of each epoch
+•	fully trained models are automatically saved in logs/udapter/*timestamp*/ as model.tar.gz files
+
+6. Training results after various epochs
+•	ran models stopping after 2, 30 and 80 epochs with modifiying udapter-test.json                               (121) "num_epochs": 80, -> (121) "num_epochs": 30,for stopping after 30 epochs, (121) "num_epochs": 2, for stopping after 2 epochs
+
+7. Predictions
+•	python predict.py logs/udapter/*timestamp*/model.tar.gz data/ud/multilingual/test.conllu output.conllu --eval_file results.json 
+•	Error ConfigurationError
+•	Fix: in predict.py  (28) parser.add_argument("--device", default=-1, type=int, help="CUDA device number; set to -1 for CPU")
+•	the results are saved in logs/udapter/*timestamp*/test_results.json and the annotated sentences are saved as output.conllu
+
+
+8. Evaluating on the Georgian Dataset
+•	Georgian test set: ka_glc-ud-test.conllu 
+•	./scripts/concat_ud_data.sh --add_lang_id (without this step, allennlp.common.checks.ConfigurationError: “Label length and sequence length don’t match: 10 and 0”  
+•	python predict.py logs/udapter/*timestamp*/model.tar.gz data/ud/multilingual/test.conllu output.conllu --eval_file results.json (than, the Georgian test set is used)
